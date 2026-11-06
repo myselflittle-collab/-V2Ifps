@@ -1,13 +1,20 @@
 name: Build apps
 
-# Builds the Windows installer/portable app and the Android APK.
-# Push a tag like v1.0.0 to publish them as a GitHub Release;
-# run manually (Actions tab → Build apps → Run workflow) to just build and test.
+# Builds and tests the Windows installer/portable app and the Android APK.
+# Publishing a GitHub Release (version taken from the VERSION file):
+#   - push a commit to main whose message contains [release], or
+#   - push a tag like v1.2.3, or
+#   - Actions tab → Build apps → Run workflow with "publish" ticked.
 on:
   push:
     tags: ["v*"]
-    branches: ["feature/**"]
+    branches: ["main", "feature/**"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub Release"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -23,7 +30,7 @@ jobs:
 
       - name: Version
         run: |
-          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "1.0.0" }
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { (Get-Content VERSION -Raw).Trim() }
           "APP_VERSION=$v" | Out-File -Append $env:GITHUB_ENV
 
       - uses: actions/setup-node@v4
@@ -99,7 +106,7 @@ jobs:
 
       - name: Version
         run: |
-          v=1.0.0; if [ "${{ github.ref_type }}" = "tag" ]; then v="${GITHUB_REF_NAME#v}"; fi
+          v=$(tr -d '[:space:]' < VERSION); if [ "${{ github.ref_type }}" = "tag" ]; then v="${GITHUB_REF_NAME#v}"; fi
           echo "APP_VERSION=$v" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
@@ -152,16 +159,29 @@ jobs:
           path: android/app/build/reports/
 
   release:
-    if: github.ref_type == 'tag'
+    if: >-
+      github.ref_type == 'tag' ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
     needs: [windows, android]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        run: |
+          v=$(tr -d '[:space:]' < VERSION); if [ "${{ github.ref_type }}" = "tag" ]; then v="${GITHUB_REF_NAME#v}"; fi
+          echo "TAG=v$v" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
           path: dist
+      - name: List files
+        run: ls -laR dist
       - uses: softprops/action-gh-release@v2
         with:
-          name: FrameX ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: FrameX ${{ env.TAG }}
+          make_latest: true
           body: |
             **Windows:** download `FrameX-Setup-*.exe` and run it (no admin rights needed). Or use the portable zip: unzip and run `FrameX.exe`.
             FFmpeg is included. If Windows SmartScreen warns about an unrecognised app, click **More info → Run anyway** (the installer is not code-signed).
@@ -172,3 +192,4 @@ jobs:
           files: |
             dist/FrameX-Windows/*
             dist/FrameX-Android/*.apk
+          fail_on_unmatched_files: true

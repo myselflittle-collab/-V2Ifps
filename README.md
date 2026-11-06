@@ -60,11 +60,12 @@ Open http://localhost:8000. `run.sh` builds the frontend on first run and serves
 
 ## Building the apps
 
-Both apps are built and tested automatically by GitHub Actions (`.github/workflows/release.yml`). Pushing a tag such as `v1.0.1` builds everything and publishes a release:
+Both apps are built and tested automatically by GitHub Actions (`.github/workflows/release.yml`) on every push to `main`. To publish a new release, bump the number in `VERSION` and push a commit whose message contains `[release]` (pushing a tag like `v1.0.1` also works):
 
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+echo 1.0.1 > VERSION
+git commit -am "FrameX 1.0.1 [release]"
+git push
 ```
 
 What the pipeline checks before publishing:
