@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three frames, fading: the FrameX mark. Content kept inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFF2B544"
+        android:pathData="M36,38h8a2,2 0 0,1 2,2v28a2,2 0 0,1 -2,2h-8a2,2 0 0,1 -2,-2v-28a2,2 0 0,1 2,-2z" />
+    <path android:fillColor="#99F2B544"
+        android:pathData="M50,38h8a2,2 0 0,1 2,2v28a2,2 0 0,1 -2,2h-8a2,2 0 0,1 -2,-2v-28a2,2 0 0,1 2,-2z" />
+    <path android:fillColor="#4DF2B544"
+        android:pathData="M64,38h8a2,2 0 0,1 2,2v28a2,2 0 0,1 -2,2h-8a2,2 0 0,1 -2,-2v-28a2,2 0 0,1 2,-2z" />
+</vector>

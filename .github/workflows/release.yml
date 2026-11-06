@@ -91,3 +91,82 @@ jobs:
           name: FrameX-Windows
           path: dist_installer/*
           if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          v=1.0.0; if [ "${{ github.ref_type }}" = "tag" ]; then v="${GITHUB_REF_NAME#v}"; fi
+          echo "APP_VERSION=$v" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Build APKs and run unit tests
+        run: gradle -p android --no-daemon testDebugUnitTest assembleRelease assembleDebug assembleDebugAndroidTest
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test the frame engine and the release APK on an Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            gradle -p android --no-daemon connectedDebugAndroidTest
+            adb logcat -d -s FrameXTest:I | tail -5
+            android/ci/smoke.sh android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Collect APK
+        if: always()
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk "out/FrameX-$APP_VERSION.apk" || true
+          cp smoke-screenshot.png out/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: FrameX-Android
+          path: out/*
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-test-reports
+          path: android/app/build/reports/
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: FrameX ${{ github.ref_name }}
+          body: |
+            **Windows:** download `FrameX-Setup-*.exe` and run it (no admin rights needed). Or use the portable zip: unzip and run `FrameX.exe`.
+            FFmpeg is included. If Windows SmartScreen warns about an unrecognised app, click **More info → Run anyway** (the installer is not code-signed).
+
+            **Android 10+:** download `FrameX-*.apk` on your phone and open it. Allow installing from your browser or Files app when asked.
+
+            Both versions extract every decoded frame at the original resolution, name them 1..N, and save a verified ZIP.
+          files: |
+            dist/FrameX-Windows/*
+            dist/FrameX-Android/*.apk
