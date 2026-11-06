@@ -1,0 +1,92 @@
+name: Build apps
+
+# Builds the Windows installer/portable app and the Android APK.
+# Push a tag like v1.0.0 to publish them as a GitHub Release;
+# run manually (Actions tab → Build apps → Run workflow) to just build and test.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "1.0.0" }
+          "APP_VERSION=$v" | Out-File -Append $env:GITHUB_ENV
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build UI
+        working-directory: frontend
+        run: npm ci; npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python packages
+        run: pip install -r backend/requirements.txt -r desktop/requirements.txt
+
+      - name: Download FFmpeg (BtbN win64 GPL shared build)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $rel = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -match '^ffmpeg-n\d+\.\d+.*-win64-gpl-shared-\d+\.\d+\.zip$' } | Sort-Object name -Descending | Select-Object -First 1
+          if (-not $asset) { $asset = $rel.assets | Where-Object { $_.name -eq 'ffmpeg-master-latest-win64-gpl-shared.zip' } }
+          Write-Host "Using $($asset.name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_x
+          $bin = Get-ChildItem ffmpeg_x -Recurse -Directory -Filter bin | Select-Object -First 1
+          New-Item -ItemType Directory desktop/ffmpeg_bin | Out-Null
+          Copy-Item "$($bin.FullName)\*" desktop/ffmpeg_bin/
+          Copy-Item (Get-ChildItem ffmpeg_x -Recurse -Filter LICENSE.txt | Select-Object -First 1).FullName desktop/FFmpeg-LICENSE.txt
+          & desktop/ffmpeg_bin/ffmpeg.exe -hide_banner -version | Select-Object -First 1
+
+      - name: Build FrameX.exe
+        run: |
+          pyinstaller desktop/framex.spec --noconfirm
+          Copy-Item desktop/FFmpeg-LICENSE.txt dist/FrameX/
+          Copy-Item LICENSE dist/FrameX/FrameX-LICENSE.txt
+
+      - name: Self-test the packaged app
+        run: |
+          $p = Start-Process dist/FrameX/FrameX.exe -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content "$env:LOCALAPPDATA/FrameX/selftest.log"
+          if ($p.ExitCode -ne 0) { throw "Self-test failed ($($p.ExitCode))" }
+
+      - name: Build installer
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc /DAppVersion=$env:APP_VERSION desktop/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - name: Install silently and self-test the installed app
+        run: |
+          $setup = Get-ChildItem dist_installer/*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+          Remove-Item "$env:LOCALAPPDATA/FrameX/selftest.log" -ErrorAction SilentlyContinue
+          $p = Start-Process "$env:LOCALAPPDATA/Programs/FrameX/FrameX.exe" -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content "$env:LOCALAPPDATA/FrameX/selftest.log"
+          if ($p.ExitCode -ne 0) { throw "Installed app self-test failed" }
+
+      - name: Package portable zip
+        run: Compress-Archive dist/FrameX/* "dist_installer/FrameX-Portable-$env:APP_VERSION-win64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FrameX-Windows
+          path: dist_installer/*
+          if-no-files-found: error

@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import extractor
-from .config import FFMPEG, FRONTEND_DIST, MAX_UPLOAD_BYTES, THUMB_WIDTH, ZIP_NAME
+from .config import FFMPEG, FRONTEND_DIST, NO_WINDOW, MAX_UPLOAD_BYTES, THUMB_WIDTH, ZIP_NAME
 from .extractor import Cancelled, ExtractionError
 from .jobs import ExtractSettings, Job, JobStore
 from .probe import ProbeError, probe
@@ -60,7 +60,7 @@ def _planned_frames(job: Job, s: Settings | ExtractSettings) -> int:
 @app.get("/api/health")
 def health() -> dict:
     try:
-        v = subprocess.run([FFMPEG, "-version"], capture_output=True, text=True, timeout=10).stdout.splitlines()[0]
+        v = subprocess.run([FFMPEG, "-version"], capture_output=True, text=True, timeout=10, **NO_WINDOW).stdout.splitlines()[0]
     except Exception as exc:  # pragma: no cover
         return {"ok": False, "ffmpeg": None, "error": str(exc)}
     return {"ok": True, "ffmpeg": v}

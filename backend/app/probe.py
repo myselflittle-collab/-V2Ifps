@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from fractions import Fraction
 from pathlib import Path
 
-from .config import FFPROBE
+from .config import FFPROBE, NO_WINDOW
 
 
 class ProbeError(RuntimeError):
@@ -50,7 +50,7 @@ class VideoInfo:
 
 
 def _run(args: list[str], timeout: int = 600) -> dict:
-    proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, **NO_WINDOW)
     if proc.returncode != 0:
         msg = proc.stderr.strip().splitlines()[-1:] or ["unknown error"]
         raise ProbeError(f"FFprobe could not read this file: {msg[0]}")

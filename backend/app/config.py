@@ -26,3 +26,6 @@ FRONTEND_DIST = Path(os.environ.get(
 
 ZIP_NAME = "FrameX_Extracted_Frames.zip"
 THUMB_WIDTH = 320
+
+# On Windows, stop every FFmpeg call from flashing a console window in the desktop app.
+NO_WINDOW = {"creationflags": 0x08000000} if os.name == "nt" else {}  # CREATE_NO_WINDOW

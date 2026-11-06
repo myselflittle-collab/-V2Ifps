@@ -9,3 +9,10 @@ frontend/dist/
 *.log
 .DS_Store
 *.tsbuildinfo
+
+# desktop build
+desktop/ffmpeg_bin/
+desktop/FFmpeg-LICENSE.txt
+build/
+dist/
+dist_installer/

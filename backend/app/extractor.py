@@ -23,7 +23,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .config import DISK_SAFETY_FACTOR, FFMPEG
+from .config import DISK_SAFETY_FACTOR, FFMPEG, NO_WINDOW
 from .jobs import ExtractSettings, Job
 
 EXT = {"png": "png", "jpeg": "jpg", "webp": "webp"}
@@ -100,7 +100,7 @@ def estimate_frame_bytes(src: Path, duration: float, fmt: str, quality: int) -> 
             cmd = [FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-y",
                    "-ss", f"{duration * p:.3f}", "-i", str(src), "-map", "0:v:0",
                    "-frames:v", "1", *encoder_args(fmt, quality), str(out)]
-            r = subprocess.run(cmd, capture_output=True, timeout=120)
+            r = subprocess.run(cmd, capture_output=True, timeout=120, **NO_WINDOW)
             if r.returncode == 0 and out.exists():
                 sizes.append(out.stat().st_size)
     if not sizes:
@@ -137,7 +137,7 @@ def extract(job: Job) -> None:
     cmd = build_command(job.video_path, str(raw_dir / f"%09d.{ext}"), s)
 
     stderr_file = (job.dir / "ffmpeg.log").open("w+")
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr_file, text=True, bufsize=1)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr_file, text=True, bufsize=1, **NO_WINDOW)
     job.process = proc
     reported = 0
     ended = False
