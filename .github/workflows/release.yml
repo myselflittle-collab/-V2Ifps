@@ -6,6 +6,7 @@ name: Build apps
 on:
   push:
     tags: ["v*"]
+    branches: ["feature/**"]
   workflow_dispatch:
 
 permissions:
