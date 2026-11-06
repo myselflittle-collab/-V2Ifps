@@ -10,6 +10,18 @@ A 10-second clip at 30 fps gives 300 images. At 120 fps, 1,200. Not one image pe
 |---|---|
 | ![Progress](docs/progress.jpg) | ![Result](docs/result-gallery.jpg) |
 
+## Download
+
+Get the apps from the [Releases page](https://github.com/myselflittle-collab/-V2Ifps/releases/latest):
+
+| Platform | File | How to install |
+|---|---|---|
+| **Windows 10/11 (64-bit)** | `FrameX-Setup-x.y.z.exe` | Run it. No administrator rights needed. FFmpeg is included. If SmartScreen says "Windows protected your PC", click **More info → Run anyway** (the installer isn't code-signed). |
+| Windows, no install | `FrameX-Portable-x.y.z-win64.zip` | Unzip anywhere and run `FrameX.exe`. |
+| **Android 10+** | `FrameX-x.y.z.apk` | Open it on the phone and allow installing from your browser or Files app when asked. |
+
+The Windows app is the full FrameX (FFmpeg engine) in its own window. The Android app is a native app that decodes with the phone's own video decoder, works offline, and saves the ZIP to **Download/FrameX**. Both produce `1.png … N.png` at the original resolution in a verified, stored (not recompressed) ZIP.
+
 ## Features
 
 - **Exact frames, exact count.** FFmpeg decodes the video and writes each frame once, in presentation order (`-fps_mode passthrough`). No `fps=` filter, no frame duplication or dropping.
@@ -45,6 +57,36 @@ pip install -r backend/requirements.txt
 ```
 
 Open http://localhost:8000. `run.sh` builds the frontend on first run and serves it from FastAPI.
+
+## Building the apps
+
+Both apps are built and tested automatically by GitHub Actions (`.github/workflows/release.yml`). Pushing a tag such as `v1.0.1` builds everything and publishes a release:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+What the pipeline checks before publishing:
+
+- **Windows:** builds `FrameX.exe` with PyInstaller (bundling FFmpeg and the UI), runs its `--selftest` (generates a 10 s 30 fps clip, extracts it, expects exactly 300 PNGs at 1280×720 named 1..300 and a CRC-valid ZIP), builds the installer, installs it silently and runs the self-test again on the installed app.
+- **Android:** runs the ZIP unit tests (including a 70,000-entry ZIP64 archive), then on an Android emulator extracts FFmpeg-generated test videos (30 fps, 120 fps, variable frame rate, rotated) and checks every single frame against a marker that moves 5 px per source frame, so a skipped, duplicated or shifted frame fails the build. It also compares pixels with FFmpeg's own decode, then installs and launches the release APK.
+
+### Build locally
+
+**Windows .exe** (on Windows, from the repo root):
+
+```powershell
+cd frontend; npm ci; npm run build; cd ..
+pip install -r backend/requirements.txt -r desktop/requirements.txt
+# put ffmpeg.exe, ffprobe.exe and their DLLs (a "shared" FFmpeg build) in desktop\ffmpeg_bin\
+pyinstaller desktop/framex.spec --noconfirm        # → dist\FrameX\FrameX.exe
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" desktop\installer.iss   # → dist_installer\FrameX-Setup-1.0.0.exe
+```
+
+`FrameX.exe --browser` opens the UI in your default browser instead of an app window. App data and logs live in `%LOCALAPPDATA%\FrameX`.
+
+**Android APK:** open the `android` folder in Android Studio and choose **Build → Build APK(s)**, or with Gradle 8.11+ and JDK 17: `gradle -p android assembleRelease`. Without signing variables the APK is signed with the debug key, which is fine for your own phone; Android then asks you to uninstall the old version before installing one built on a different machine. To sign with your own key, set `FRAMEX_KEYSTORE`, `FRAMEX_KEYSTORE_PASSWORD`, `FRAMEX_KEY_ALIAS` and `FRAMEX_KEY_PASSWORD`.
 
 ## Development
 
@@ -134,6 +176,12 @@ Browser ── PUT /api/upload (streamed to disk) ──► FFprobe: metadata + 
 ## Project structure
 
 ```
+desktop/           Windows app: launcher (native window + self-test), PyInstaller spec, installer
+android/           Android app (Kotlin, Jetpack Compose)
+  app/src/main/…/engine/   VideoProbe (metadata, frame count, VFR), FrameDecoder (MediaCodec →
+                           OpenGL → RGBA), FrameExtractor (parallel PNG/JPEG/WebP encoding,
+                           naming, validation), ZipStore (stored ZIP/ZIP64 writer + verifier)
+  app/src/androidTest/     Emulator tests with FFmpeg-made videos and reference frames
 backend/
   app/
     main.py        FastAPI routes, job orchestration, static frontend
@@ -153,4 +201,4 @@ frontend/
 
 ## License
 
-MIT
+MIT. The Windows build bundles FFmpeg (GPL build from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)); its licence is included next to `FrameX.exe`.
