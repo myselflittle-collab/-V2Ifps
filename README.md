@@ -38,8 +38,8 @@ A 10-second clip at 30 fps gives 300 images. At 120 fps, 1,200. Not one image pe
 ## Quick start
 
 ```bash
-git clone https://github.com/myselflittle-collab/video-to-image-based-on-fps.git
-cd video-to-image-based-on-fps
+git clone https://github.com/myselflittle-collab/-V2Ifps.git
+cd ./-V2Ifps
 pip install -r backend/requirements.txt
 ./run.sh          # Windows: run.bat
 ```
